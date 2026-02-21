@@ -1,0 +1,78 @@
+# =======================
+# Terraform
+# =======================
+
+# ローカルの .terraform ディレクトリ（プロバイダーバイナリなど）
+.terraform/
+.terraform.lock.hcl
+
+# Terraform プランファイル
+*.tfplan
+*.tfplan.json
+
+# Terraform ステートファイル（リモートバックエンド使用時はローカルに不要）
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Terraform 変数ファイル（機密情報を含む可能性があるため）
+*.tfvars
+*.tfvars.json
+# ただし example/template は除外しない場合は以下をコメントアウト
+# !*.tfvars.example
+# !*.tfvars.template
+
+# Terraform クラッシュログ
+crash.log
+crash.*.log
+
+# Terraform override ファイル
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# =======================
+# 機密情報・認証情報
+# =======================
+
+# AWS 認証情報
+.aws/
+credentials
+
+# SSH 秘密鍵
+*.pem
+*.key
+id_rsa
+id_ed25519
+
+# =======================
+# エディタ・OS
+# =======================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# JetBrains (IntelliJ, GoLand, etc.)
+.idea/
+
+# VSCode
+.vscode/
+
+# Vim
+*.swp
+*.swo
+
+# =======================
+# その他
+# =======================
+
+# ログファイル
+*.log
+
+# 環境変数ファイル
+.env
+.env.*
+!.env.example
