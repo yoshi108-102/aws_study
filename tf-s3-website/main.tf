@@ -40,15 +40,6 @@ resource "aws_s3_bucket_website_configuration" "website" {
   }
 }
 
-# 公開アクセスブロックを解除（静的ウェブサイトには必要）
-resource "aws_s3_bucket_public_access_block" "website" {
-  bucket = aws_s3_bucket.website.id
-  block_public_acls       = false
-  block_public_policy     = false
-  ignore_public_acls      = false
-  restrict_public_buckets = false
-}
-
 # バケットポリシー：パブリック読み取りを許可
 resource "aws_s3_bucket_policy" "website" {
   # public_access_block を先に解除しないとエラーになる
@@ -69,6 +60,17 @@ resource "aws_s3_bucket_policy" "website" {
     ]
   })
 }
+
+# 公開アクセスブロックを解除（静的ウェブサイトには必要）
+resource "aws_s3_bucket_public_access_block" "website" {
+  bucket = aws_s3_bucket.website.id
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+
 
 # -------------------------------------------------------
 # サイトファイルのアップロード（site/ ディレクトリ以下）
