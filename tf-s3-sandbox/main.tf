@@ -33,6 +33,23 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_object" "memo" {
+  for_each = fileset("${path.module}/../memo", "**/*.md")
+
+  bucket = aws_s3_bucket.this.bucket
+
+  # S3上のキー（=パス）。memo/ の下に同じ構造で置く
+  key = "memo/${each.value}"
+
+  # ローカルファイルの実体
+  source = "${path.module}/../memo/${each.value}"
+
+  content_type = "text/markdown; charset=utf-8"
+
+  # ファイル変更を確実に検知して更新させる
+  etag = filemd5("${path.module}/../memo/${each.value}")
+}
+
 output "bucket_name" {
   value = aws_s3_bucket.this.bucket
 }
