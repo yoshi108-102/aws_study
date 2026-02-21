@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>404 - ページが見つかりません</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;600&display=swap"
+        rel="stylesheet" />
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #0d1117;
+            color: #e6edf3;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            text-align: center;
+            padding: 24px;
+        }
+
+        .code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: clamp(4rem, 15vw, 8rem);
+            font-weight: 600;
+            background: linear-gradient(135deg, #58a6ff, #bc8cff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            color: #8b949e;
+            font-weight: 400;
+        }
+
+        a {
+            margin-top: 8px;
+            color: #58a6ff;
+            text-decoration: none;
+            font-size: 0.9rem;
+            border: 1px solid #30363d;
+            padding: 8px 20px;
+            border-radius: 8px;
+            transition: border-color 0.18s;
+        }
+
+        a:hover {
+            border-color: #58a6ff;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="code">404</div>
+    <h1>ページが見つかりませんでした</h1>
+    <a href="/">← トップへ戻る</a>
+</body>
+
+</html>
