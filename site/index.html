@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Boyer-Moore / Boyer-Moore-Horspool Visualizer</title>
+  <meta name="description" content="Boyer-Moore法とBoyer-Moore-Horspool法の文字列検索アルゴリズムをステップごとに可視化するインタラクティブデモ。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0d1117;
+      --surface:    #161b22;
+      --surface2:   #21262d;
+      --border:     #30363d;
+      --text:       #e6edf3;
+      --text-muted: #8b949e;
+      --accent:     #58a6ff;
+      --accent2:    #bc8cff;
+      --green:      #3fb950;
+      --red:        #f85149;
+      --yellow:     #d29922;
+      --orange:     #f0883e;
+      --radius:     12px;
+      --mono:       'JetBrains Mono', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      width: 100%;
+      padding: 28px 24px 20px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+    }
+    header h1 {
+      font-size: clamp(1.4rem, 4vw, 2rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header p {
+      margin-top: 6px;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    /* ===== TABS ===== */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin: 24px 0 0;
+      padding: 0 24px;
+    }
+    .tab-btn {
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+    .tab-btn:hover { color: var(--text); border-color: var(--accent); }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #0d1117;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ===== MAIN LAYOUT ===== */
+    main {
+      width: 100%;
+      max-width: 1000px;
+      padding: 24px;
+      flex: 1;
+    }
+
+    .panel {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .panel.active { display: flex; }
+
+    /* ===== CARD ===== */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    /* ===== INPUT AREA ===== */
+    .input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 600px) { .input-row { grid-template-columns: 1fr; } }
+
+    .field label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .field input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.18s;
+    }
+    .field input:focus { border-color: var(--accent); }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 9px 20px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #0d1117;
+    }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-secondary {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--text);
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-icon {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 14px;
+    }
+    .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ===== VISUALIZER ===== */
+    .viz-area {
+      overflow-x: auto;
+    }
+
+    .char-track {
+      display: flex;
+      gap: 2px;
+      margin: 6px 0;
+      min-width: max-content;
+    }
+    .char-box {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 1rem;
+      font-weight: 600;
+      border: 2px solid transparent;
+      transition: all 0.28s ease;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .char-idx {
+      position: absolute;
+      top: -18px;
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+
+    /* text背景 */
+    .text-box { background: var(--surface2); color: var(--text); }
+    .text-box.window    { border-color: var(--border); background: #21262d; }
+    .text-box.comparing { border-color: var(--yellow); background: rgba(210,153,34,0.15); color: var(--yellow); }
+    .text-box.matched   { border-color: var(--green);  background: rgba(63,185,80,0.15);  color: var(--green); }
+    .text-box.mismatch  { border-color: var(--red);    background: rgba(248,81,73,0.15);   color: var(--red); }
+    .text-box.found     { border-color: var(--accent);  background: rgba(88,166,255,0.2);   color: var(--accent); }
+    .text-box.pivot     { border-color: var(--orange); background: rgba(240,136,62,0.15);  }
+
+    /* pattern */
+    .pat-box { background: transparent; color: var(--text-muted); border-color: transparent; }
+    .pat-box.active   { color: var(--text); }
+    .pat-box.matching { border-color: var(--yellow); background: rgba(210,153,34,0.15); color: var(--yellow); }
+    .pat-box.matched  { border-color: var(--green);  background: rgba(63,185,80,0.15);  color: var(--green); }
+    .pat-box.miss     { border-color: var(--red);    background: rgba(248,81,73,0.15);   color: var(--red); }
+
+    .track-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    /* ===== INFO BOX ===== */
+    .info-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      min-height: 60px;
+    }
+    .info-box .tag {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 8px;
+    }
+    .tag-match   { background: rgba(63,185,80,0.2);  color: var(--green); }
+    .tag-miss    { background: rgba(248,81,73,0.2);   color: var(--red); }
+    .tag-found   { background: rgba(88,166,255,0.2);  color: var(--accent); }
+    .tag-shift   { background: rgba(210,153,34,0.2);  color: var(--yellow); }
+
+    /* ===== STEP CONTROLS ===== */
+    .step-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .step-counter {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-left: auto;
+      font-family: var(--mono);
+    }
+
+    input[type="range"] {
+      flex: 1;
+      min-width: 120px;
+      accent-color: var(--accent);
+    }
+
+    /* ===== TABLE ===== */
+    .shift-table-wrap {
+      overflow-x: auto;
+    }
+    table {
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      width: 100%;
+    }
+    th, td {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+    th { background: var(--surface2); color: var(--text-muted); font-weight: 600; }
+    td { color: var(--text); }
+    tr:hover td { background: rgba(88,166,255,0.05); }
+
+    /* ===== EXPLANATION ===== */
+    .explainer {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .explainer h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: var(--accent);
+    }
+    .explainer p, .explainer li {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+    .explainer ul { padding-left: 18px; margin-top: 6px; }
+    .explainer li { margin-bottom: 4px; }
+    .hl { color: var(--text); font-weight: 500; }
+    .hl-accent { color: var(--accent); font-weight: 500; }
+
+    /* ===== RESULTS ===== */
+    .result-badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+    .badge {
+      background: rgba(88,166,255,0.15);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+    }
+
+    .no-result {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Boyer-Moore / Boyer-Moore-Horspool</h1>
+  <p>文字列検索アルゴリズムのステップ可視化デモ</p>
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-bm"  onclick="switchTab('bm')">Boyer-Moore (BM)</button>
+    <button class="tab-btn"        id="tab-bmh" onclick="switchTab('bmh')">Boyer-Moore-Horspool (BMH)</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ========== BM PANEL ========== -->
+  <div class="panel active" id="panel-bm">
+
+    <div class="card">
+      <div class="card-title">入力</div>
+      <div class="input-row">
+        <div class="field">
+          <label for="bm-text">テキスト (Text)</label>
+          <input id="bm-text" type="text" value="ABCABC ABCABD ABCABC" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label for="bm-pattern">パターン (Pattern)</label>
+          <input id="bm-pattern" type="text" value="ABCABC" spellcheck="false" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="runBM()">▶ 実行</button>
+        <button class="btn-secondary" onclick="resetBM()">リセット</button>
+      </div>
+    </div>
+
+    <div class="card" id="bm-viz-card" style="display:none;">
+      <div class="card-title">可視化</div>
+      <div class="viz-area" id="bm-viz"></div>
+    </div>
+
+    <div class="card" id="bm-ctrl-card" style="display:none;">
+      <div class="card-title">ステップ操作</div>
+      <div class="step-controls">
+        <button class="btn-icon" onclick="bmStep(-10)" title="−10">«</button>
+        <button class="btn-icon" onclick="bmStep(-1)"  title="前へ">‹</button>
+        <input type="range" id="bm-slider" min="0" value="0" oninput="bmGoTo(this.value)" />
+        <button class="btn-icon" onclick="bmStep(1)"   title="次へ">›</button>
+        <button class="btn-icon" onclick="bmStep(10)"  title="+10">»</button>
+        <span class="step-counter" id="bm-counter">0 / 0</span>
+      </div>
+      <div class="info-box" id="bm-info" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="card" id="bm-table-card" style="display:none;">
+      <div class="card-title">Bad Character テーブル</div>
+      <div class="shift-table-wrap" id="bm-bad-table"></div>
+      <div class="card-title" style="margin-top:16px;">Good Suffix テーブル</div>
+      <div class="shift-table-wrap" id="bm-good-table"></div>
+    </div>
+
+    <div class="card" id="bm-result-card" style="display:none;">
+      <div class="card-title">検索結果</div>
+      <div id="bm-result-content"></div>
+    </div>
+
+    <div class="explainer">
+      <h3>Boyer-Moore 法とは？</h3>
+      <p>
+        <span class="hl">Boyer-Moore法</span>は1977年に提案された高速文字列検索アルゴリズムです。
+        パターンを<span class="hl-accent">右端から左</span>へ比較し、ミスマッチ時に2つのヒューリスティクスで大きくスキップします。
+      </p>
+      <ul>
+        <li><span class="hl">Bad Character Rule</span>：ミスマッチした文字がパターン中にあれば、その位置まで揃えるようにシフト</li>
+        <li><span class="hl">Good Suffix Rule</span>：マッチした接尾辞をもとに、次の候補位置へスキップ</li>
+        <li>テキストが長く・文字種が多いほど効果的（1文字あたりのシフト量が増える）</li>
+      </ul>
+    </div>
+
+  </div><!-- /panel-bm -->
+
+  <!-- ========== BMH PANEL ========== -->
+  <div class="panel" id="panel-bmh">
+
+    <div class="card">
+      <div class="card-title">入力</div>
+      <div class="input-row">
+        <div class="field">
+          <label for="bmh-text">テキスト (Text)</label>
+          <input id="bmh-text" type="text" value="ABCABC ABCABD ABCABC" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label for="bmh-pattern">パターン (Pattern)</label>
+          <input id="bmh-pattern" type="text" value="ABCABC" spellcheck="false" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="runBMH()">▶ 実行</button>
+        <button class="btn-secondary" onclick="resetBMH()">リセット</button>
+      </div>
+    </div>
+
+    <div class="card" id="bmh-viz-card" style="display:none;">
+      <div class="card-title">可視化</div>
+      <div class="viz-area" id="bmh-viz"></div>
+    </div>
+
+    <div class="card" id="bmh-ctrl-card" style="display:none;">
+      <div class="card-title">ステップ操作</div>
+      <div class="step-controls">
+        <button class="btn-icon" onclick="bmhStep(-10)" title="−10">«</button>
+        <button class="btn-icon" onclick="bmhStep(-1)"  title="前へ">‹</button>
+        <input type="range" id="bmh-slider" min="0" value="0" oninput="bmhGoTo(this.value)" />
+        <button class="btn-icon" onclick="bmhStep(1)"   title="次へ">›</button>
+        <button class="btn-icon" onclick="bmhStep(10)"  title="+10">»</button>
+        <span class="step-counter" id="bmh-counter">0 / 0</span>
+      </div>
+      <div class="info-box" id="bmh-info" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="card" id="bmh-table-card" style="display:none;">
+      <div class="card-title">Horspool (Bad Character) シフトテーブル</div>
+      <div class="shift-table-wrap" id="bmh-shift-table"></div>
+    </div>
+
+    <div class="card" id="bmh-result-card" style="display:none;">
+      <div class="card-title">検索結果</div>
+      <div id="bmh-result-content"></div>
+    </div>
+
+    <div class="explainer">
+      <h3>Boyer-Moore-Horspool 法とは？</h3>
+      <p>
+        <span class="hl">BMH法</span>はR.N.Horspoolが1980年に提案した、Boyer-Mooreの簡略版です。
+        Good Suffix を使わず、<span class="hl-accent">窓の末尾文字</span>だけでシフト量を決定します。
+      </p>
+      <ul>
+        <li>実装が非常にシンプルで、実用上は多くのケースでBMと同等・それ以上の速さ</li>
+        <li>シフトの判定に<span class="hl">ミスマッチした位置の文字ではなく、窓末尾の文字</span>を使う点が重要</li>
+        <li>BMと比べてテーブルが1つで済む（Bad Character テーブルのみ）</li>
+      </ul>
+    </div>
+
+  </div><!-- /panel-bmh -->
+
+</main>
+
+<!-- ========== SCRIPTS ========== -->
+<script type="module">
+  import { boyerMooreSteps, buildBadCharTable, buildGoodSuffixTable } from './assets/js/algorithms/boyer-moore.js';
+  import { boyerMooreHorspoolSteps, buildHorspoolTable }               from './assets/js/algorithms/boyer-moore-horspool.js';
+
+  // ─── タブ切り替え ──────────────────────────────────
+  window.switchTab = (tab) => {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`panel-${tab}`).classList.add('active');
+    document.getElementById(`tab-${tab}`).classList.add('active');
+  };
+
+  // ─── BM 状態 ────────────────────────────────────────
+  let bmSteps = [], bmIdx = 0;
+
+  window.runBM = () => {
+    const text    = document.getElementById('bm-text').value;
+    const pattern = document.getElementById('bm-pattern').value;
+    if (!text || !pattern) return;
+
+    bmSteps = boyerMooreSteps(text, pattern);
+    bmIdx   = 0;
+
+    const badChar   = buildBadCharTable(pattern);
+    const goodSuffix = buildGoodSuffixTable(pattern);
+
+    renderBadCharTable(badChar, pattern, 'bm-bad-table');
+    renderGoodSuffixTable(goodSuffix, pattern, 'bm-good-table');
+
+    ['bm-viz-card','bm-ctrl-card','bm-table-card','bm-result-card'].forEach(id =>
+      document.getElementById(id).style.display = 'block'
+    );
+
+    const slider = document.getElementById('bm-slider');
+    slider.max   = bmSteps.length > 0 ? bmSteps.length - 1 : 0;
+    slider.value = 0;
+
+    renderBMStep();
+    renderBMResult(bmSteps, text, pattern);
+  };
+
+  window.resetBM = () => {
+    ['bm-viz-card','bm-ctrl-card','bm-table-card','bm-result-card'].forEach(id =>
+      document.getElementById(id).style.display = 'none'
+    );
+    bmSteps = []; bmIdx = 0;
+  };
+
+  window.bmStep  = (d) => { bmIdx = clamp(bmIdx + d, 0, bmSteps.length - 1); document.getElementById('bm-slider').value = bmIdx; renderBMStep(); };
+  window.bmGoTo  = (v) => { bmIdx = parseInt(v, 10); renderBMStep(); };
+
+  function renderBMStep() {
+    if (!bmSteps.length) return;
+    const step = bmSteps[bmIdx];
+    const text    = document.getElementById('bm-text').value;
+    const pattern = document.getElementById('bm-pattern').value;
+
+    document.getElementById('bm-counter').textContent = `${bmIdx + 1} / ${bmSteps.length}`;
+    document.getElementById('bm-viz').innerHTML = renderViz(text, pattern, step);
+    document.getElementById('bm-info').innerHTML = renderBMInfo(step);
+  }
+
+  function renderBMInfo(st) {
+    if (!st) return '';
+    if (st.shiftRule === 'found') {
+      return `<span class="tag tag-found">FOUND</span> 位置 <strong>${st.foundAt}</strong> でパターンが一致！シフト = ${st.shift}`;
+    }
+    if (st.shift !== null) {
+      const bc = st.badCharShift  !== undefined ? st.badCharShift  : '?';
+      const gs = st.goodSuffixShift !== undefined ? st.goodSuffixShift : '?';
+      return `<span class="tag tag-miss">MISMATCH</span>
+        Bad Character シフト = <strong>${bc}</strong>　
+        Good Suffix シフト = <strong>${gs}</strong>　→　
+        <span class="tag tag-shift">採用 (${st.shiftRule}) : ${st.shift}</span>`;
+    }
+    if (st.matched) {
+      return `<span class="tag tag-match">MATCH</span> テキスト[${st.comparePos}] = パターン[${st.patternIdx}] 一致`;
+    }
+    return `<span class="tag tag-miss">MISMATCH</span> テキスト[${st.comparePos}] ≠ パターン[${st.patternIdx}]`;
+  }
+
+  function renderBMResult(steps, text, pattern) {
+    const found = steps.filter(s => s.foundAt !== null).map(s => s.foundAt);
+    const el = document.getElementById('bm-result-content');
+    if (!found.length) {
+      el.innerHTML = `<p class="no-result">「${pattern}」はテキスト中に見つかりませんでした。</p>`;
+      return;
+    }
+    el.innerHTML = `
+      <p style="font-size:.875rem;color:var(--text-muted);margin-bottom:8px;">
+        「${pattern}」が <strong style="color:var(--text)">${found.length}</strong> 箇所で見つかりました：
+      </p>
+      <div class="result-badges">${found.map(i => `<span class="badge">位置 ${i}</span>`).join('')}</div>
+    `;
+  }
+
+  // ─── BMH 状態 ───────────────────────────────────────
+  let bmhSteps = [], bmhIdx = 0;
+
+  window.runBMH = () => {
+    const text    = document.getElementById('bmh-text').value;
+    const pattern = document.getElementById('bmh-pattern').value;
+    if (!text || !pattern) return;
+
+    bmhSteps = boyerMooreHorspoolSteps(text, pattern);
+    bmhIdx   = 0;
+
+    const shiftTable = buildHorspoolTable(pattern);
+    renderHorspoolTable(shiftTable, pattern, 'bmh-shift-table');
+
+    ['bmh-viz-card','bmh-ctrl-card','bmh-table-card','bmh-result-card'].forEach(id =>
+      document.getElementById(id).style.display = 'block'
+    );
+
+    const slider = document.getElementById('bmh-slider');
+    slider.max   = bmhSteps.length > 0 ? bmhSteps.length - 1 : 0;
+    slider.value = 0;
+
+    renderBMHStep();
+    renderBMHResult(bmhSteps, text, pattern);
+  };
+
+  window.resetBMH = () => {
+    ['bmh-viz-card','bmh-ctrl-card','bmh-table-card','bmh-result-card'].forEach(id =>
+      document.getElementById(id).style.display = 'none'
+    );
+    bmhSteps = []; bmhIdx = 0;
+  };
+
+  window.bmhStep = (d) => { bmhIdx = clamp(bmhIdx + d, 0, bmhSteps.length - 1); document.getElementById('bmh-slider').value = bmhIdx; renderBMHStep(); };
+  window.bmhGoTo = (v) => { bmhIdx = parseInt(v, 10); renderBMHStep(); };
+
+  function renderBMHStep() {
+    if (!bmhSteps.length) return;
+    const step = bmhSteps[bmhIdx];
+    const text    = document.getElementById('bmh-text').value;
+    const pattern = document.getElementById('bmh-pattern').value;
+
+    document.getElementById('bmh-counter').textContent = `${bmhIdx + 1} / ${bmhSteps.length}`;
+    document.getElementById('bmh-viz').innerHTML = renderViz(text, pattern, step, true);
+    document.getElementById('bmh-info').innerHTML = renderBMHInfo(step);
+  }
+
+  function renderBMHInfo(st) {
+    if (!st) return '';
+    const pivot = st.pivotChar ? `　（窓末尾文字 = <strong>"${st.pivotChar}"</strong>）` : '';
+    if (st.shiftRule === 'found') {
+      return `<span class="tag tag-found">FOUND</span> 位置 <strong>${st.foundAt}</strong> でパターンが一致！シフト = ${st.shift}${pivot}`;
+    }
+    if (st.shift !== null) {
+      return `<span class="tag tag-miss">MISMATCH</span>${pivot}　→　
+        <span class="tag tag-shift">シフト (Bad Character) : ${st.shift}</span>`;
+    }
+    if (st.matched) {
+      return `<span class="tag tag-match">MATCH</span> テキスト[${st.comparePos}] = パターン[${st.patternIdx}] 一致${pivot}`;
+    }
+    return `<span class="tag tag-miss">MISMATCH</span> テキスト[${st.comparePos}] ≠ パターン[${st.patternIdx}]${pivot}`;
+  }
+
+  function renderBMHResult(steps, text, pattern) {
+    const found = steps.filter(s => s.foundAt !== null).map(s => s.foundAt);
+    const el = document.getElementById('bmh-result-content');
+    if (!found.length) {
+      el.innerHTML = `<p class="no-result">「${pattern}」はテキスト中に見つかりませんでした。</p>`;
+      return;
+    }
+    el.innerHTML = `
+      <p style="font-size:.875rem;color:var(--text-muted);margin-bottom:8px;">
+        「${pattern}」が <strong style="color:var(--text)">${found.length}</strong> 箇所で見つかりました：
+      </p>
+      <div class="result-badges">${found.map(i => `<span class="badge">位置 ${i}</span>`).join('')}</div>
+    `;
+  }
+
+  // ─── 共通：可視化レンダー ────────────────────────────
+  function renderViz(text, pattern, step, isHorspool = false) {
+    const m = pattern.length;
+    const patStart = step.patternPos;
+    const pivotPos = isHorspool ? patStart + m - 1 : null; // Horspoolの窓末尾
+
+    // テキスト行
+    let textRow = '<div class="track-label">Text</div><div class="char-track">';
+    for (let i = 0; i < text.length; i++) {
+      let cls = 'char-box text-box';
+      if (i >= patStart && i < patStart + m) cls += ' window';
+      if (isHorspool && i === pivotPos)    cls += ' pivot';
+      if (i === step.comparePos) {
+        if (step.shiftRule === 'found' || (step.matched && step.shift === null)) cls += ' found';
+        else if (step.matched) cls += ' matched';
+        else cls += ' mismatch';
+      }
+      if (step.foundAt !== null && i >= step.foundAt && i < step.foundAt + m) cls += ' found';
+      textRow += `<div class="${cls}"><span class="char-idx">${i}</span>${esc(text[i])}</div>`;
+    }
+    textRow += '</div>';
+
+    // パターン行（オフセット分スペース）
+    let patRow = '<div class="track-label">Pattern</div><div class="char-track">';
+    // スペーサー
+    patRow += `<div style="width:${patStart * 38}px;flex-shrink:0;"></div>`;
+    for (let j = 0; j < m; j++) {
+      const textIdx = patStart + j;
+      let cls = 'char-box pat-box';
+      if (textIdx < text.length) {
+        cls += ' active';
+        if (j === step.patternIdx) {
+          if (step.shiftRule === 'found' || (step.matched && step.shift === null)) cls += ' matched';
+          else if (step.matched) cls += ' matching';
+          else cls += ' miss';
+        }
+        if (step.foundAt !== null) cls += ' matched';
+      }
+      patRow += `<div class="${cls}">${esc(pattern[j])}</div>`;
+    }
+    patRow += '</div>';
+
+    return textRow + patRow;
+  }
+
+  // ─── テーブル描画 ────────────────────────────────────
+  function renderBadCharTable(table, pattern, containerId) {
+    const entries = Object.entries(table);
+    if (!entries.length) { document.getElementById(containerId).innerHTML = '<p style="color:var(--text-muted);font-size:.85rem;">（テーブルなし：パターンが1文字以下）</p>'; return; }
+    let html = '<table><tr><th>文字</th>' + entries.map(([c]) => `<th>${esc(c)}</th>`).join('') + '</tr>';
+    html += '<tr><td>シフト量</td>' + entries.map(([,v]) => `<td>${v}</td>`).join('') + '</tr></table>';
+    html += `<p style="margin-top:10px;font-size:.8rem;color:var(--text-muted);">その他の文字のシフト量 = ${pattern.length}</p>`;
+    document.getElementById(containerId).innerHTML = html;
+  }
+
+  function renderGoodSuffixTable(shift, pattern, containerId) {
+    let html = '<table><tr><th>j+1 (パターン長方向)</th>';
+    for (let i = 0; i <= pattern.length; i++) html += `<th>${i}</th>`;
+    html += '</tr><tr><td>シフト量</td>';
+    for (let i = 0; i <= pattern.length; i++) html += `<td>${shift[i]}</td>`;
+    html += '</tr></table>';
+    document.getElementById(containerId).innerHTML = html;
+  }
+
+  function renderHorspoolTable(table, pattern, containerId) {
+    const entries = Object.entries(table);
+    if (!entries.length) { document.getElementById(containerId).innerHTML = '<p style="color:var(--text-muted);font-size:.85rem;">（テーブルなし）</p>'; return; }
+    let html = '<table><tr><th>文字</th>' + entries.map(([c]) => `<th>${esc(c)}</th>`).join('') + '</tr>';
+    html += '<tr><td>シフト量</td>' + entries.map(([,v]) => `<td>${v}</td>`).join('') + '</tr></table>';
+    html += `<p style="margin-top:10px;font-size:.8rem;color:var(--text-muted);">その他の文字のシフト量 = ${pattern.length}</p>`;
+    document.getElementById(containerId).innerHTML = html;
+  }
+
+  // ─── ユーティリティ ─────────────────────────────────
+  function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+  function esc(c) { return c === ' ' ? '·' : (c === undefined ? '' : c.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')); }
+</script>
+
+</body>
+</html>
