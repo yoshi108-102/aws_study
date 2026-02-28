@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>認証局 (CA) の仕組み</title>
+  <meta name="description" content="認証局（Certificate Authority）の仕組みを図解付きで分かりやすく解説。公開鍵基盤（PKI）、証明書の発行・検証フロー、証明書チェーンなど。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0d1117;
+      --surface:    #161b22;
+      --surface2:   #21262d;
+      --border:     #30363d;
+      --text:       #e6edf3;
+      --text-muted: #8b949e;
+      --accent:     #58a6ff;
+      --accent2:    #bc8cff;
+      --green:      #3fb950;
+      --red:        #f85149;
+      --yellow:     #d29922;
+      --orange:     #f0883e;
+      --cyan:       #39d2c0;
+      --radius:     12px;
+      --mono:       'JetBrains Mono', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+
+    /* ===== PROGRESS BAR ===== */
+    #progress-bar {
+      position: fixed; top: 0; left: 0; height: 3px; width: 0;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      z-index: 9999; transition: width 0.1s linear;
+      box-shadow: 0 0 8px rgba(88,166,255,0.5);
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      width: 100%;
+      padding: 32px 24px 24px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    #particle-canvas {
+      position: absolute; inset: 0; pointer-events: none;
+    }
+    header h1 {
+      font-size: clamp(1.5rem, 4vw, 2.2rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      position: relative;
+    }
+    header p {
+      margin-top: 8px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      position: relative;
+    }
+    .back-link {
+      display: inline-block;
+      margin-top: 12px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.85rem;
+      transition: opacity 0.2s;
+      position: relative;
+    }
+    .back-link:hover { opacity: 0.7; }
+
+    /* ===== MAIN ===== */
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+
+    /* ===== SCROLL REVEAL ===== */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s cubic-bezier(.22,.61,.36,1),
+                  transform 0.7s cubic-bezier(.22,.61,.36,1);
+    }
+    .reveal.revealed {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal.delay-1 { transition-delay: 0.1s; }
+    .reveal.delay-2 { transition-delay: 0.2s; }
+    .reveal.delay-3 { transition-delay: 0.3s; }
+
+    /* ===== SECTION ===== */
+    .section {
+      margin-bottom: 48px;
+    }
+    .section h2 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      color: var(--accent);
+    }
+    .section h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 20px 0 10px;
+      color: var(--accent2);
+    }
+    .section p {
+      margin-bottom: 12px;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+
+    /* ===== CARD ===== */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+    }
+    .card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px rgba(88,166,255,0.08);
+      transform: translateY(-2px);
+    }
+    .card-title {
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title .icon {
+      font-size: 1.2rem;
+    }
+
+    /* ===== FLOW DIAGRAM ===== */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 20px 0;
+    }
+    .flow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      position: relative;
+      opacity: 0;
+      transform: translateX(-30px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .flow-step.flow-visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .flow-number {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      font-family: var(--mono);
+      color: #0d1117;
+      position: relative;
+      z-index: 1;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .flow-step.flow-visible .flow-number {
+      animation: popIn 0.4s cubic-bezier(.34,1.56,.64,1) forwards;
+    }
+    @keyframes popIn {
+      0%   { transform: scale(0); }
+      100% { transform: scale(1); }
+    }
+    .flow-step:not(:last-child) .flow-number::after {
+      content: '';
+      position: absolute;
+      top: 36px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 2px;
+      height: calc(100% + 8px);
+      background: var(--border);
+    }
+    .flow-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      flex: 1;
+      margin-bottom: 12px;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .flow-step:hover .flow-content {
+      border-color: var(--accent);
+      box-shadow: 0 0 16px rgba(88,166,255,0.06);
+    }
+    .flow-content strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.9rem;
+    }
+    .flow-content p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Flow color coding */
+    .flow-step[data-color="blue"]   .flow-number { background: var(--accent); }
+    .flow-step[data-color="purple"] .flow-number { background: var(--accent2); }
+    .flow-step[data-color="green"]  .flow-number { background: var(--green); }
+    .flow-step[data-color="orange"] .flow-number { background: var(--orange); }
+    .flow-step[data-color="cyan"]   .flow-number { background: var(--cyan); }
+    .flow-step[data-color="yellow"] .flow-number { background: var(--yellow); }
+
+    /* ===== DIAGRAM (ASCII-like box) ===== */
+    .diagram-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin: 20px 0;
+      overflow-x: auto;
+    }
+    .diagram-box pre {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.6;
+      color: var(--text);
+      white-space: pre;
+      margin: 0;
+    }
+
+    /* ===== INTERACTIVE CERTIFICATE INSPECTOR ===== */
+    #cert-inspector {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0;
+      margin: 20px 0;
+      overflow: hidden;
+      position: relative;
+    }
+    .cert-header-bar {
+      background: var(--surface2);
+      padding: 10px 18px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cert-header-bar .dots {
+      display: flex; gap: 5px;
+    }
+    .cert-header-bar .dots span {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .cert-header-bar .dots span:nth-child(1) { background: var(--red); }
+    .cert-header-bar .dots span:nth-child(2) { background: var(--yellow); }
+    .cert-header-bar .dots span:nth-child(3) { background: var(--green); }
+    .cert-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 260px;
+    }
+    .cert-fields {
+      padding: 16px 18px;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      line-height: 2;
+    }
+    .cert-field {
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .cert-field:hover, .cert-field.active {
+      background: rgba(88,166,255,0.12);
+    }
+    .cert-field .field-key {
+      color: var(--accent2);
+    }
+    .cert-field .field-val {
+      color: var(--text);
+    }
+    #cert-info-panel {
+      background: var(--surface2);
+      padding: 20px;
+      border-left: 1px solid var(--border);
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      transition: opacity 0.3s;
+      opacity: 0.5;
+    }
+    #cert-info-panel.visible {
+      opacity: 1;
+      color: var(--text);
+    }
+    @media (max-width: 640px) {
+      .cert-body { grid-template-columns: 1fr; }
+      #cert-info-panel { border-left: none; border-top: 1px solid var(--border); min-height: 100px; }
+    }
+
+    /* ===== TABLE ===== */
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.9rem;
+    }
+    .info-table th,
+    .info-table td {
+      text-align: left;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+    .info-table th {
+      background: var(--surface2);
+      font-weight: 600;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .info-table td {
+      background: var(--surface);
+      color: var(--text);
+    }
+    .info-table tbody tr.row-glow td {
+      background: rgba(88,166,255,0.06);
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+
+    /* ===== TAG / BADGE ===== */
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-family: var(--mono);
+    }
+    .badge-blue   { background: rgba(88,166,255,0.15); color: var(--accent); }
+    .badge-green  { background: rgba(63,185,80,0.15);  color: var(--green); }
+    .badge-red    { background: rgba(248,81,73,0.15);  color: var(--red); }
+    .badge-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
+    .badge-purple { background: rgba(188,140,255,0.15); color: var(--accent2); }
+
+    /* ===== KEY-VALUE LIST ===== */
+    .kv-list {
+      list-style: none;
+      margin: 8px 0;
+    }
+    .kv-list li {
+      padding: 6px 0;
+      font-size: 0.9rem;
+      display: flex;
+      gap: 8px;
+    }
+    .kv-list li::before {
+      content: '▸';
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ===== CHAIN VISUAL ===== */
+    .chain {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin: 24px 0;
+      overflow-x: auto;
+      padding: 8px 0;
+    }
+    .chain-node {
+      flex-shrink: 0;
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      text-align: center;
+      min-width: 150px;
+      border: 2px solid;
+      cursor: pointer;
+      transition: transform 0.3s, box-shadow 0.3s;
+      position: relative;
+    }
+    .chain-node:hover {
+      transform: translateY(-4px) scale(1.03);
+    }
+    .chain-node.expanded {
+      box-shadow: 0 0 24px rgba(88,166,255,0.15);
+    }
+    .chain-node strong {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+    }
+    .chain-node span {
+      font-size: 0.75rem;
+    }
+    .chain-node.root {
+      background: rgba(248,81,73,0.08);
+      border-color: var(--red);
+      color: var(--red);
+    }
+    .chain-node.intermediate {
+      background: rgba(210,153,34,0.08);
+      border-color: var(--yellow);
+      color: var(--yellow);
+    }
+    .chain-node.leaf {
+      background: rgba(63,185,80,0.08);
+      border-color: var(--green);
+      color: var(--green);
+    }
+    .chain-detail {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid currentColor;
+      font-size: 0.72rem;
+      line-height: 1.5;
+      text-align: left;
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: opacity 0.4s, max-height 0.4s;
+    }
+    .chain-detail.open {
+      opacity: 1;
+      max-height: 200px;
+    }
+    .chain-arrow-svg {
+      flex-shrink: 0;
+      padding: 0 4px;
+      opacity: 0;
+      transition: opacity 0.6s;
+    }
+    .chain-arrow-svg.animate {
+      opacity: 1;
+    }
+    .chain-arrow-svg .arrow-line {
+      stroke-dasharray: 40;
+      stroke-dashoffset: 40;
+    }
+    .chain-arrow-svg.animate .arrow-line {
+      animation: drawLine 0.8s ease forwards;
+    }
+    @keyframes drawLine {
+      to { stroke-dashoffset: 0; }
+    }
+    .chain-arrow-svg .arrow-dot {
+      opacity: 0;
+    }
+    .chain-arrow-svg.animate .arrow-dot {
+      animation: pulseDot 1.5s ease-in-out infinite 0.8s;
+    }
+    @keyframes pulseDot {
+      0%, 100% { opacity: 0.3; r: 3; }
+      50%      { opacity: 1;   r: 5; }
+    }
+
+    /* ===== TLS SIMULATOR ===== */
+    #tls-sim {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin: 20px 0;
+    }
+    .sim-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
+    }
+    .sim-header h3 {
+      font-size: 1rem; font-weight: 600; color: var(--accent); margin: 0;
+    }
+    .sim-start {
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: 1px solid var(--accent);
+      background: rgba(88,166,255,0.1);
+      color: var(--accent);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sim-start:hover:not(:disabled) {
+      background: var(--accent);
+      color: #0d1117;
+    }
+    .sim-start:disabled { opacity: 0.5; cursor: not-allowed; }
+    .sim-arena {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 16px;
+      min-height: 60px;
+    }
+    .sim-actor {
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      min-width: 80px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface2);
+    }
+    .sim-actor .sim-emoji { font-size: 1.8rem; display: block; margin-bottom: 4px; }
+    .sim-messages {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .sim-msg {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      opacity: 0.25;
+      transition: opacity 0.5s, transform 0.5s;
+      transform: translateX(0);
+      border: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .sim-msg.sent {
+      transform: translateX(6px);
+      background: rgba(88,166,255,0.08);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .sim-msg.received {
+      transform: translateX(-6px);
+      background: rgba(63,185,80,0.08);
+      border-color: var(--green);
+      color: var(--green);
+    }
+    .sim-status {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      padding: 8px;
+      border-radius: 8px;
+      transition: all 0.3s;
+    }
+    .sim-status.running { color: var(--yellow); }
+    .sim-status.done    { color: var(--green); font-weight: 600; }
+    .sim-lock {
+      display: block;
+      text-align: center;
+      font-size: 2.5rem;
+      margin: 8px 0;
+      transition: transform 0.5s;
+    }
+    .sim-lock.locked {
+      animation: lockBounce 0.6s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes lockBounce {
+      0%   { transform: scale(0.5) rotate(-20deg); }
+      60%  { transform: scale(1.3) rotate(5deg); }
+      100% { transform: scale(1) rotate(0deg); }
+    }
+
+    /* ===== VERIFICATION DEMO ===== */
+    #verify-demo {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin: 20px 0;
+    }
+    .verify-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
+    }
+    .verify-header h3 {
+      font-size: 1rem; font-weight: 600; color: var(--accent); margin: 0;
+    }
+    .verify-reset {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text-muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .verify-reset:hover { border-color: var(--accent); color: var(--accent); }
+    .verify-checks {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .verify-check {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface2);
+      cursor: pointer;
+      transition: all 0.3s;
+      font-size: 0.88rem;
+    }
+    .verify-check:hover:not(.checked) {
+      border-color: var(--accent);
+      background: rgba(88,166,255,0.04);
+    }
+    .verify-check.checked {
+      border-color: var(--green);
+      background: rgba(63,185,80,0.06);
+    }
+    .verify-check.checked .check-label { color: var(--green); }
+    .check-icon {
+      font-size: 1.2rem;
+      flex-shrink: 0;
+      transition: transform 0.3s;
+    }
+    .verify-check.checked .check-icon {
+      animation: checkPop 0.3s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes checkPop {
+      0%   { transform: scale(0); }
+      100% { transform: scale(1); }
+    }
+    .verify-result {
+      margin-top: 16px;
+      padding: 14px 18px;
+      border-radius: 8px;
+      background: rgba(63,185,80,0.08);
+      border: 1px solid var(--green);
+      color: var(--green);
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.5s;
+    }
+    .verify-result.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ===== GRID ===== */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    @media (max-width: 640px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .chain { flex-direction: column; }
+      .chain-arrow-svg { transform: rotate(90deg); }
+    }
+
+    /* ===== HIGHLIGHT BOX ===== */
+    .highlight-box {
+      border-left: 3px solid var(--accent);
+      background: rgba(88,166,255,0.06);
+      padding: 14px 18px;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      margin: 16px 0;
+      font-size: 0.9rem;
+    }
+    .highlight-box.warn {
+      border-left-color: var(--yellow);
+      background: rgba(210,153,34,0.06);
+    }
+    .highlight-box.danger {
+      border-left-color: var(--red);
+      background: rgba(248,81,73,0.06);
+    }
+    .highlight-box.success {
+      border-left-color: var(--green);
+      background: rgba(63,185,80,0.06);
+    }
+
+    /* ===== FOOTER ===== */
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 4px; }
+  </style>
+</head>
+
+<body>
+
+<!-- Progress Bar -->
+<div id="progress-bar"></div>
+
+<!-- ===== HEADER ===== -->
+<header>
+  <canvas id="particle-canvas"></canvas>
+  <h1>🔐 認証局 (CA) の仕組み</h1>
+  <p>Certificate Authority ― 公開鍵基盤（PKI）と証明書の世界を理解する</p>
+  <a href="index.html" class="back-link">← トップに戻る</a>
+</header>
+
+<!-- ===== MAIN ===== -->
+<main>
+
+  <!-- ==================== 1. 概要 ==================== -->
+  <div class="section reveal">
+    <h2>1. 認証局（CA）とは</h2>
+    <p>
+      <strong>認証局 (Certificate Authority)</strong> とは、デジタル証明書を発行・管理する信頼された第三者機関です。
+      インターネット上の通信（HTTPS など）において「この公開鍵は確かにこのドメイン／組織のものである」と保証する役割を担います。
+    </p>
+    <div class="highlight-box">
+      💡 認証局は現実世界における「パスポートセンター」のようなもの。身元を確認し、身分証明書（＝デジタル証明書）を発行します。
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><span class="icon">🔑</span> 公開鍵暗号が前提</div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">
+          通信の暗号化・署名検証は<strong>公開鍵</strong>と<strong>秘密鍵</strong>のペアで行われます。
+          CA は「公開鍵が本物であること」を証明します。
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">🌐</span> PKI（公開鍵基盤）</div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">
+          CA を中心とした信頼モデル全体を <strong>PKI (Public Key Infrastructure)</strong> と呼びます。
+          鍵の生成・配布・失効管理を含む体系的な仕組みです。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 2. 証明書の中身 ==================== -->
+  <div class="section reveal">
+    <h2>2. デジタル証明書 (X.509) の構造</h2>
+    <p>SSL/TLS で使われる証明書は <strong>X.509</strong> 規格に従っています。フィールドにマウスを乗せると詳細が表示されます。</p>
+
+    <div id="cert-inspector">
+      <div class="cert-header-bar">
+        <div class="dots"><span></span><span></span><span></span></div>
+        <span>certificate.pem ― X.509 証明書ビューア</span>
+      </div>
+      <div class="cert-body">
+        <div class="cert-fields">
+          <div class="cert-field" data-info="<strong>Subject（主体者）</strong><br/>証明書の所有者を識別する情報。CN（Common Name）にはドメイン名、O には組織名が入ります。">
+            <span class="field-key">Subject:</span> <span class="field-val">CN=example.com, O=Example Inc.</span>
+          </div>
+          <div class="cert-field" data-info="<strong>Issuer（発行者）</strong><br/>この証明書を発行した CA の識別情報。証明書チェーンで上位を辿るときに使います。">
+            <span class="field-key">Issuer:</span> <span class="field-val">CN=MyCA Intermediate, O=MyCA</span>
+          </div>
+          <div class="cert-field" data-info="<strong>Serial Number</strong><br/>CA 内で一意に割り当てられる番号。CRL（失効リスト）で失効証明書を特定する際に使われます。">
+            <span class="field-key">Serial:</span> <span class="field-val">0x1A2B3C4D5E6F</span>
+          </div>
+          <div class="cert-field" data-info="<strong>Validity（有効期間）</strong><br/>Not Before ～ Not After で定義。期限切れの証明書はブラウザに拒否されます。">
+            <span class="field-key">Validity:</span> <span class="field-val">2025-01-01 ～ 2026-12-31</span>
+          </div>
+          <div class="cert-field" data-info="<strong>Public Key（公開鍵）</strong><br/>所有者の公開鍵。ブラウザはこの鍵を使ってセッション鍵の交換や署名検証を行います。">
+            <span class="field-key">Public Key:</span> <span class="field-val">RSA 2048-bit</span>
+          </div>
+          <div class="cert-field" data-info="<strong>Sig Algorithm</strong><br/>CA が署名に使ったアルゴリズム。SHA-256 + RSA が現在の主流。古い SHA-1 は非推奨です。">
+            <span class="field-key">Sig Algo:</span> <span class="field-val">SHA-256 with RSA</span>
+          </div>
+          <div class="cert-field" data-info="<strong>SAN（Subject Alternative Name）</strong><br/>この証明書が有効なドメイン名の一覧。ワイルドカード（*.example.com）も指定できます。">
+            <span class="field-key">SAN:</span> <span class="field-val">example.com, www.example.com</span>
+          </div>
+          <div class="cert-field" data-info="<strong>Digital Signature</strong><br/>CA の秘密鍵で生成された署名。証明書の内容が改ざんされていないことを保証します。">
+            <span class="field-key">Signature:</span> <span class="field-val">3c:a1:4f:...（256 bytes）</span>
+          </div>
+        </div>
+        <div id="cert-info-panel">
+          👆 各フィールドにマウスを乗せると<br/>詳細な説明が表示されます
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 3. 証明書チェーン ==================== -->
+  <div class="section reveal">
+    <h2>3. 証明書チェーン（信頼の連鎖）</h2>
+    <p>
+      CA は階層構造を持ちます。最上位の<strong>ルート CA</strong> から末端の<strong>サーバー証明書</strong>まで、
+      署名が連鎖することで信頼が伝播します。<strong>各ノードをクリック</strong>すると詳細が見られます。
+    </p>
+
+    <div class="chain">
+      <div class="chain-node root" data-detail="<strong>自己署名証明書</strong><br/>Subject = Issuer（自分で自分を署名）。OS / ブラウザのトラストストアに事前にインストールされ、信頼の起点となる。オフラインで厳重管理される。">
+        <strong>ルート CA</strong>
+        <span>自己署名証明書<br/>OS・ブラウザに内蔵</span>
+      </div>
+      <svg class="chain-arrow-svg" width="50" height="30" viewBox="0 0 50 30">
+        <line class="arrow-line" x1="2" y1="15" x2="42" y2="15" stroke="#8b949e" stroke-width="2" stroke-linecap="round"/>
+        <polygon points="42,9 50,15 42,21" fill="#8b949e"/>
+        <circle class="arrow-dot" cx="22" cy="15" r="3" fill="#58a6ff"/>
+      </svg>
+      <div class="chain-node intermediate" data-detail="<strong>中間証明書</strong><br/>ルート CA から署名を受ける。ルート CA の秘密鍵の露出を防ぎつつ、実際のサーバー証明書を発行する。目的別・地域別に複数の中間 CA を設けることができる。">
+        <strong>中間 CA</strong>
+        <span>ルート CA が署名<br/>実運用で証明書を発行</span>
+      </div>
+      <svg class="chain-arrow-svg" width="50" height="30" viewBox="0 0 50 30">
+        <line class="arrow-line" x1="2" y1="15" x2="42" y2="15" stroke="#8b949e" stroke-width="2" stroke-linecap="round"/>
+        <polygon points="42,9 50,15 42,21" fill="#8b949e"/>
+        <circle class="arrow-dot" cx="22" cy="15" r="3" fill="#58a6ff"/>
+      </svg>
+      <div class="chain-node leaf" data-detail="<strong>エンドエンティティ証明書</strong><br/>Web サーバーなどに設置される末端の証明書。中間 CA が署名する。ブラウザはこの証明書のチェーンを辿り、ルート CA に到達することで信頼を確認する。">
+        <strong>サーバー証明書</strong>
+        <span>中間 CA が署名<br/>Web サイト等で使用</span>
+      </div>
+    </div>
+
+    <div class="highlight-box warn">
+      ⚠️ ルート CA の秘密鍵が漏洩するとチェーン全体が崩壊するため、ルート CA はオフラインで厳重に管理され、
+      日常の証明書発行は<strong>中間 CA</strong> が担当します。
+    </div>
+
+    <h3>なぜ階層構造にするのか？</h3>
+    <ul class="kv-list">
+      <li><strong>セキュリティ</strong>：ルート CA の秘密鍵の使用頻度を最小化し、漏洩リスクを下げる</li>
+      <li><strong>運用柔軟性</strong>：中間 CA を目的別（地域別・サービス別）に分けられる</li>
+      <li><strong>失効管理</strong>：中間 CA の証明書を失効させれば、配下の証明書をまとめて無効化できる</li>
+    </ul>
+  </div>
+
+  <!-- ==================== 4. 証明書発行フロー ==================== -->
+  <div class="section reveal">
+    <h2>4. 証明書の発行フロー</h2>
+    <p>Web サイト運営者が SSL/TLS 証明書を取得する流れを見てみましょう。</p>
+
+    <div class="flow">
+      <div class="flow-step" data-color="blue">
+        <div class="flow-number">1</div>
+        <div class="flow-content">
+          <strong>鍵ペアの生成</strong>
+          <p>サーバー管理者が RSA / ECDSA などの公開鍵・秘密鍵ペアを生成する。秘密鍵はサーバー側で厳重に保管。</p>
+        </div>
+      </div>
+
+      <div class="flow-step" data-color="purple">
+        <div class="flow-number">2</div>
+        <div class="flow-content">
+          <strong>CSR（証明書署名要求）の作成</strong>
+          <p>公開鍵＋ドメイン名・組織情報を含む CSR (Certificate Signing Request) を作成し、CA に送付する。</p>
+        </div>
+      </div>
+
+      <div class="flow-step" data-color="orange">
+        <div class="flow-number">3</div>
+        <div class="flow-content">
+          <strong>CA による審査（検証）</strong>
+          <p>CA が申請者の身元やドメインの所有権を確認する。検証レベルによって DV / OV / EV に分かれる（後述）。</p>
+        </div>
+      </div>
+
+      <div class="flow-step" data-color="green">
+        <div class="flow-number">4</div>
+        <div class="flow-content">
+          <strong>証明書の署名・発行</strong>
+          <p>審査に通ると、CA が自身の秘密鍵で CSR の内容に署名し、デジタル証明書を発行する。</p>
+        </div>
+      </div>
+
+      <div class="flow-step" data-color="cyan">
+        <div class="flow-number">5</div>
+        <div class="flow-content">
+          <strong>サーバーへのインストール</strong>
+          <p>発行された証明書＋中間証明書をサーバーに設定。以降 HTTPS 通信で使用される。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-box" data-typing>
+<pre>
+  Server Admin                          CA (Certificate Authority)
+  ┌─────────────┐                       ┌─────────────┐
+  │ 1. Generate  │                       │             │
+  │    Key Pair  │                       │             │
+  └──────┬──────┘                       │             │
+         │  2. Send CSR                  │             │
+         │ ──────────────────────────▶  │  3. Review  │
+         │                               │   Validate  │
+         │  4. Issue Certificate          │             │
+         │ ◀──────────────────────────  │             │
+  ┌──────┴──────┐                       └─────────────┘
+  │ 5. Install   │
+  │    on Server │
+  └─────────────┘
+</pre>
+    </div>
+  </div>
+
+  <!-- ==================== 5. TLSハンドシェイク シミュレーター ==================== -->
+  <div class="section reveal">
+    <h2>5. TLS ハンドシェイク シミュレーター</h2>
+    <p>ブラウザとサーバー間の TLS 接続確立を体験してみましょう。<strong>「接続開始」</strong>ボタンをクリック！</p>
+
+    <div id="tls-sim">
+      <div class="sim-header">
+        <h3>🌐 TLS 1.3 Handshake</h3>
+        <button class="sim-start">▶ 接続開始</button>
+      </div>
+
+      <div class="sim-arena">
+        <div class="sim-actor">
+          <span class="sim-emoji">🖥️</span>
+          ブラウザ
+        </div>
+        <div class="sim-messages">
+          <div class="sim-msg" data-dir="right" data-label="1. ClientHello を送信中...">→ ClientHello（対応暗号スイート一覧 + ランダム値）</div>
+          <div class="sim-msg" data-dir="left"  data-label="2. ServerHello を受信中...">← ServerHello（選択した暗号スイート + ランダム値）</div>
+          <div class="sim-msg" data-dir="left"  data-label="3. サーバー証明書を受信中...">← Certificate（サーバー証明書 + 中間証明書）</div>
+          <div class="sim-msg" data-dir="left"  data-label="4. 証明書チェーンを検証中...">🔍 証明書チェーン検証（ルート CA まで辿る）</div>
+          <div class="sim-msg" data-dir="right" data-label="5. 鍵交換を実行中...">⇄ 鍵交換（ECDHE）→ 共通セッション鍵を生成</div>
+          <div class="sim-msg" data-dir="right" data-label="6. 暗号化通信を開始...">← → Finished（以降すべて暗号化通信）</div>
+        </div>
+        <div class="sim-actor">
+          <span class="sim-emoji">🗄️</span>
+          サーバー
+        </div>
+      </div>
+
+      <div class="sim-lock">🔓</div>
+      <div class="sim-status">ボタンを押して TLS ハンドシェイクを開始</div>
+    </div>
+  </div>
+
+  <!-- ==================== 6. 証明書の検証デモ ==================== -->
+  <div class="section reveal">
+    <h2>6. 証明書の検証フロー（インタラクティブ）</h2>
+    <p>ブラウザが証明書を検証するステップを順番にクリックして、すべての検証を完了させてみましょう。</p>
+
+    <div id="verify-demo">
+      <div class="verify-header">
+        <h3>🔍 証明書検証チェックリスト</h3>
+        <button class="verify-reset">↺ リセット</button>
+      </div>
+      <div class="verify-checks">
+        <div class="verify-check">
+          <span class="check-icon">⬜</span>
+          <span class="check-label"><strong>① チェーン構築</strong>：サーバー証明書 → 中間 CA → ルート CA の信頼チェーンを辿る</span>
+        </div>
+        <div class="verify-check">
+          <span class="check-icon">⬜</span>
+          <span class="check-label"><strong>② 署名検証</strong>：各証明書の署名を上位 CA の公開鍵で検証する</span>
+        </div>
+        <div class="verify-check">
+          <span class="check-icon">⬜</span>
+          <span class="check-label"><strong>③ 有効期限</strong>：証明書の Not Before ～ Not After が現在時刻を含むか確認</span>
+        </div>
+        <div class="verify-check">
+          <span class="check-icon">⬜</span>
+          <span class="check-label"><strong>④ 失効確認</strong>：CRL / OCSP で証明書が失効していないか問い合わせ</span>
+        </div>
+        <div class="verify-check">
+          <span class="check-icon">⬜</span>
+          <span class="check-label"><strong>⑤ ドメイン照合</strong>：証明書の SAN / CN がアクセス先ドメインと一致するか確認</span>
+        </div>
+      </div>
+      <div class="verify-result">🔒 すべての検証に合格！安全な HTTPS 接続が確立されました</div>
+    </div>
+  </div>
+
+  <!-- ==================== 7. 検証レベル ==================== -->
+  <div class="section reveal">
+    <h2>7. 証明書の検証レベル</h2>
+    <p>CA が発行する証明書には、審査の厳密さによって 3 つのレベルがあります。</p>
+
+    <table class="info-table">
+      <thead>
+        <tr><th>レベル</th><th>審査内容</th><th>信頼度</th><th>用途例</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-blue">DV</span> Domain Validation</td>
+          <td>ドメインの所有権のみ確認</td>
+          <td>★☆☆</td>
+          <td>個人ブログ、小規模サイト</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-yellow">OV</span> Organization Validation</td>
+          <td>ドメイン＋組織の実在性を確認</td>
+          <td>★★☆</td>
+          <td>企業サイト、SaaS</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-green">EV</span> Extended Validation</td>
+          <td>厳格な組織審査（登記簿・電話確認等）</td>
+          <td>★★★</td>
+          <td>銀行、EC サイト、政府機関</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="highlight-box">
+      💡 暗号強度はどのレベルでも同じです。違いは「誰が持っているか」の信頼性の証明レベルです。
+    </div>
+  </div>
+
+  <!-- ==================== 8. 失効の仕組み ==================== -->
+  <div class="section reveal">
+    <h2>8. 証明書の失効（Revocation）</h2>
+    <p>秘密鍵が漏洩した場合など、有効期限前に証明書を無効化する仕組みが必要です。</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><span class="icon">📋</span> CRL（Certificate Revocation List）</div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">
+          CA が失効した証明書のシリアル番号一覧を定期的に公開。ブラウザがダウンロードして照合する。
+          <br/><br/>
+          <span class="badge badge-red">課題</span> リストが大きくなるとダウンロードに時間がかかる。
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">⚡</span> OCSP（Online Certificate Status Protocol）</div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">
+          ブラウザが CA に対しリアルタイムで「この証明書は有効？」と問い合わせる。
+          <br/><br/>
+          <span class="badge badge-green">改良</span> <strong>OCSP Stapling</strong> ではサーバー側が事前に応答をキャッシュし、パフォーマンスとプライバシーを改善。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 9. ACM ==================== -->
+  <div class="section reveal">
+    <h2>9. AWS での認証局活用 ― ACM</h2>
+    <p>
+      <strong>AWS Certificate Manager (ACM)</strong> を使うと、SSL/TLS 証明書の取得・管理・デプロイが大幅に簡単になります。
+    </p>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">☁️</span> ACM の主な特徴</div>
+      <ul class="kv-list">
+        <li><strong>無料の DV 証明書</strong>：ACM で発行する公開証明書は追加料金なし</li>
+        <li><strong>自動更新</strong>：有効期限が近づくと ACM が自動的に証明書を更新</li>
+        <li><strong>AWS サービス統合</strong>：CloudFront、ALB、API Gateway などにワンクリックでデプロイ</li>
+        <li><strong>DNS / メール検証</strong>：ドメイン所有権の確認方法を選択可能</li>
+        <li><strong>Private CA</strong>：ACM Private CA で社内用のプライベート認証局を構築可能</li>
+      </ul>
+    </div>
+
+    <div class="diagram-box" data-typing>
+<pre>
+  ┌──────────────────────────────────────────────────┐
+  │            AWS Certificate Manager               │
+  │                                                  │
+  │   [1] Request Certificate                        │
+  │        ↓                                         │
+  │   [2] DNS / Email Validation                     │
+  │        ↓                                         │
+  │   [3] Issue  (CA = Amazon Trust Services)        │
+  │        ↓                                         │
+  │   [4] Attach to AWS Resources                    │
+  │        ├── CloudFront Distribution               │
+  │        ├── Application Load Balancer             │
+  │        ├── API Gateway                           │
+  │        └── Elastic Beanstalk                     │
+  │                                                  │
+  │   [5] Auto-Renew  (60 days before expiry)        │
+  └──────────────────────────────────────────────────┘
+</pre>
+    </div>
+
+    <div class="highlight-box success">
+      ✅ ACM + CloudFront + Route 53 の組み合わせは、独自ドメインで HTTPS を実現する AWS の定番パターンです。
+    </div>
+  </div>
+
+  <!-- ==================== 10. Let's Encrypt ==================== -->
+  <div class="section reveal">
+    <h2>10. Let's Encrypt ― 無料 CA の革命</h2>
+    <p>
+      <strong>Let's Encrypt</strong> は 2015 年にサービスを開始した無料・自動・オープンな認証局です。
+      ACME プロトコルを使い、証明書の発行を完全に自動化しました。
+    </p>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><span class="icon">🆓</span> 特徴</div>
+        <ul class="kv-list">
+          <li>DV 証明書を完全無料で発行</li>
+          <li>ACME プロトコルで自動化</li>
+          <li>有効期間 90 日（自動更新推奨）</li>
+          <li>Certbot 等のクライアントで簡単導入</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">⚙️</span> ACME の流れ</div>
+        <ul class="kv-list">
+          <li>クライアントが CA にチャレンジを要求</li>
+          <li>HTTP-01 / DNS-01 でドメイン所有を証明</li>
+          <li>検証成功 → 証明書が自動発行</li>
+          <li>cron / systemd で定期的に自動更新</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 11. まとめ ==================== -->
+  <div class="section reveal">
+    <h2>11. まとめ</h2>
+
+    <div class="card" style="border-color: var(--accent);">
+      <div class="card-title"><span class="icon">📝</span> キーポイント</div>
+      <ul class="kv-list">
+        <li><strong>認証局 (CA)</strong> は公開鍵の所有者を保証する信頼された第三者</li>
+        <li><strong>証明書チェーン</strong> により、ルート CA → 中間 CA → サーバー証明書と信頼が連鎖する</li>
+        <li>証明書の発行は <strong>CSR → 審査 → 署名</strong> の流れで行われる</li>
+        <li>ブラウザは<strong>署名検証・有効期限・失効確認・ドメイン照合</strong>で証明書を検証する</li>
+        <li>検証レベルは <strong>DV &lt; OV &lt; EV</strong> の 3 段階</li>
+        <li>失効管理には <strong>CRL</strong> と <strong>OCSP</strong>（+ OCSP Stapling）がある</li>
+        <li>AWS では <strong>ACM</strong> で証明書を無料・自動管理できる</li>
+        <li><strong>Let's Encrypt</strong> で誰でも無料で DV 証明書を取得可能</li>
+      </ul>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  &copy; 2026 AWS Study Notes — Certificate Authority
+</footer>
+
+<script src="assets/js/ca-interactive.js"></script>
+</body>
+</html>
