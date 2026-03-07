@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terraform だけで始める AWS Lambda</title>
+  <meta name="description" content="Terraform だけで AWS Lambda を作成し、Function URL で実行確認する最小構成を解説します。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    :root {
+      --bg: #f4efe6;
+      --paper: rgba(255, 250, 242, 0.78);
+      --ink: #1f2933;
+      --muted: #5f6c78;
+      --line: rgba(31, 41, 51, 0.12);
+      --primary: #0f766e;
+      --primary-soft: #d7f3ee;
+      --accent: #c2410c;
+      --accent-soft: #ffe3d4;
+      --shadow: 0 18px 40px rgba(92, 74, 54, 0.12);
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Manrope', sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 28%),
+        radial-gradient(circle at top right, rgba(194, 65, 12, 0.16), transparent 22%),
+        linear-gradient(180deg, #efe4d2 0%, #f7f3ec 45%, #f4efe6 100%);
+    }
+
+    .page {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 56px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, rgba(255, 250, 242, 0.9), rgba(255, 245, 235, 0.78));
+      border: 1px solid rgba(31, 41, 51, 0.08);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      padding: 28px;
+      backdrop-filter: blur(8px);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -60px -80px auto;
+      width: 260px;
+      height: 260px;
+      background: radial-gradient(circle, rgba(15, 118, 110, 0.14), transparent 65%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 18px 0 14px;
+      font-size: clamp(2rem, 6vw, 4.3rem);
+      line-height: 0.96;
+      letter-spacing: -0.05em;
+      max-width: 10ch;
+    }
+
+    .hero p {
+      max-width: 62ch;
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.8;
+      color: var(--muted);
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 16px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 0.92rem;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+      opacity: 0.92;
+    }
+
+    .button.primary {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 10px 22px rgba(15, 118, 110, 0.2);
+    }
+
+    .button.secondary {
+      background: rgba(255, 255, 255, 0.62);
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+      margin-top: 20px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid rgba(31, 41, 51, 0.08);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      backdrop-filter: blur(8px);
+    }
+
+    .card h2 {
+      margin: 0 0 14px;
+      font-size: 1.2rem;
+      letter-spacing: -0.03em;
+    }
+
+    .card p,
+    .card li {
+      color: var(--muted);
+      line-height: 1.8;
+      font-size: 0.95rem;
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+
+    .flow {
+      display: grid;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .flow-step {
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 14px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.48);
+      border: 1px solid rgba(31, 41, 51, 0.08);
+    }
+
+    .flow-step strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--ink);
+      font-size: 0.95rem;
+    }
+
+    .number {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--primary), #14b8a6);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 0;
+      padding: 18px;
+      border-radius: 18px;
+      background: #1f2933;
+      color: #f8fafc;
+      font-family: var(--mono);
+      font-size: 0.88rem;
+      line-height: 1.7;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    code {
+      font-family: var(--mono);
+    }
+
+    .spec-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 14px;
+    }
+
+    .spec {
+      padding: 14px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.55);
+      border: 1px solid rgba(31, 41, 51, 0.08);
+    }
+
+    .spec dt {
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 800;
+    }
+
+    .spec dd {
+      margin: 8px 0 0;
+      color: var(--ink);
+      font-weight: 700;
+      font-size: 0.96rem;
+    }
+
+    .note {
+      padding: 14px 16px;
+      border-left: 4px solid var(--accent);
+      background: rgba(255, 227, 212, 0.56);
+      border-radius: 0 14px 14px 0;
+    }
+
+    @media (max-width: 840px) {
+      .grid.two,
+      .spec-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .page {
+        width: min(100% - 20px, 1120px);
+      }
+
+      .hero,
+      .card {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="eyebrow">Terraform Only / Lambda</div>
+      <h1>AWS Lambda を Terraform だけで作る</h1>
+      <p>
+        このサンプルは、Lambda 関数本体の zip 化から IAM ロール、CloudWatch Logs、Function URL の作成までを Terraform だけで完結させる最小構成です。
+        まずは 1 本の Lambda を確実に動かし、あとから API Gateway や EventBridge に広げる前段として使えます。
+      </p>
+      <div class="hero-actions">
+        <a class="button primary" href="#files">読む場所へ移動</a>
+        <a class="button secondary" href="/">トップへ戻る</a>
+      </div>
+    </section>
+
+    <div class="grid two">
+      <section class="card">
+        <span class="pill">この構成で作るもの</span>
+        <h2>学習しやすい最小セット</h2>
+        <div class="stack">
+          <p>Lambda 関数本体は Python で 1 ファイルだけです。Terraform 側で zip を作成し、そのまま Lambda にデプロイします。</p>
+          <p>公開確認は Function URL を使います。API Gateway を挟まないので、まずは Lambda 自体の実行に集中できます。</p>
+          <p>CloudWatch Logs を明示的に作ることで、実行ログの確認場所も最初から固定できます。</p>
+        </div>
+        <dl class="spec-grid">
+          <div class="spec">
+            <dt>Runtime</dt>
+            <dd>Python 3.13</dd>
+          </div>
+          <div class="spec">
+            <dt>Invoke</dt>
+            <dd>Function URL</dd>
+          </div>
+          <div class="spec">
+            <dt>Logs</dt>
+            <dd>CloudWatch Logs</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="card">
+        <span class="pill">処理の流れ</span>
+        <h2>apply すると何が起こるか</h2>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="number">01</div>
+            <div>
+              <strong>Python ファイルを zip 化</strong>
+              <p>archive provider の archive_file が lambda_function.py を zip にまとめます。</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="number">02</div>
+            <div>
+              <strong>Lambda 実行ロールを作成</strong>
+              <p>Lambda が CloudWatch Logs に書き込めるように、基本実行ポリシーをアタッチします。</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="number">03</div>
+            <div>
+              <strong>CloudWatch Logs を準備</strong>
+              <p>ロググループを先に作り、保持期間を 7 日に固定します。</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="number">04</div>
+            <div>
+              <strong>Function URL を公開</strong>
+              <p>認証なしの URL を作るので、curl やブラウザからすぐ実行確認できます。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid two">
+      <section class="card">
+        <span class="pill">Terraform の実行</span>
+        <h2>コマンドはこれだけ</h2>
+        <pre><code>cd tf-lambda-hello
+terraform init
+terraform plan
+terraform apply
+
+curl "$(terraform output -raw function_url)"</code></pre>
+      </section>
+
+      <section class="card">
+        <span class="pill">レスポンス例</span>
+        <h2>返ってくる JSON</h2>
+        <pre><code>{
+  "message": "Hello from Terraform-managed Lambda",
+  "app_name": "tf-lambda-hello",
+  "method": "GET",
+  "path": "/",
+  "timestamp": "2026-03-07T10:30:00+00:00",
+  "request_id": "..."
+}</code></pre>
+      </section>
+    </div>
+
+    <section class="card" id="files">
+      <span class="pill">ファイルの見方</span>
+      <h2>どこを読むと理解しやすいか</h2>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="number">A</div>
+          <div>
+            <strong>main.tf</strong>
+            <p>tf-lambda-hello/main.tf を読みます。provider、archive_file、IAM、Lambda、Function URL の依存関係を追うと全体像がつかみやすいです。</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="number">B</div>
+          <div>
+            <strong>lambda_function.py</strong>
+            <p>tf-lambda-hello/lambda_function.py を読みます。受け取ったイベントから HTTP メソッドとパスを取り出し、JSON を返すだけの処理です。</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="number">C</div>
+          <div>
+            <strong>README.md</strong>
+            <p>tf-lambda-hello/README.md には実行手順を短くまとめています。適用後は function_url と cloudwatch_log_group を確認します。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <span class="pill">注意点</span>
+      <h2>最初に押さえるべき点</h2>
+      <div class="stack">
+        <p class="note">Function URL は認証なしで公開しています。学習用としては分かりやすいですが、長期運用や実サービスでは IAM 認証や API Gateway を検討した方が安全です。</p>
+        <p>Lambda を理解する最初の段階では、イベントソースを増やしすぎない方がいいです。この構成で 1 回動かした後に、EventBridge や S3 トリガーへ進むのが自然です。</p>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

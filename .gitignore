@@ -5,7 +5,7 @@
 # ローカルの .terraform ディレクトリ（プロバイダーバイナリなど）
 .terraform/
 .terraform.lock.hcl
-
+.github/
 # Terraform プランファイル
 *.tfplan
 *.tfplan.json
@@ -71,6 +71,9 @@ id_ed25519
 
 # ログファイル
 *.log
+
+# Terraform が生成する Lambda パッケージ
+tf-lambda-hello/lambda_function.zip
 
 # 環境変数ファイル
 .env
