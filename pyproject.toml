@@ -1,0 +1,9 @@
+[project]
+name = "aws-study"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "aws-lambda-powertools>=3.26.0",
+]

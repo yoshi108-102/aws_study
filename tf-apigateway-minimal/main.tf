@@ -21,6 +21,11 @@ provider "aws" {
   region = var.aws_region
 }
 
+data "aws_lambda_layer_version" "powertools" {
+  # AWS 公開の Powertools Layer を参照する。version を省略すると最新を取得する。
+  layer_name = "arn:aws:lambda:${var.aws_region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python312-x86_64"
+}
+
 resource "random_id" "suffix" {
   byte_length = 3
 }
@@ -62,12 +67,21 @@ resource "aws_lambda_function" "api_handler" {
   # handler は "<module_path>.<function_name>" で、ZIP ルートからの Python モジュールパスを指定する。
   handler       = "app.handlers.api.lambda_handler"
   filename      = data.archive_file.lambda_zip.output_path
+  # Powertools 本体は AWS 公開 Layer から読み込む。
+  layers        = [data.aws_lambda_layer_version.powertools.arn]
 
   # ZIP の差分を検知して更新するため、source_code_hash は実運用でもほぼ必須。
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
   timeout     = 10
   memory_size = 128
+
+  environment {
+    variables = {
+      POWERTOOLS_SERVICE_NAME = var.project_name
+      POWERTOOLS_LOG_LEVEL    = var.powertools_log_level
+    }
+  }
 }
 
 resource "aws_apigatewayv2_api" "http_api" {

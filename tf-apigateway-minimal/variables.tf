@@ -9,3 +9,9 @@ variable "project_name" {
   type        = string
   default     = "apigw-minimal"
 }
+
+variable "powertools_log_level" {
+  description = "AWS Lambda Powertools log level (DEBUG/INFO/WARNING/ERROR)"
+  type        = string
+  default     = "INFO"
+}
