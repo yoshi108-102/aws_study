@@ -35,7 +35,7 @@ def lambda_handler(event, context):
             body = json.loads(body_text)
         except json.JSONDecodeError:
             return _response(400, {"error": "invalid json"})
-
+    
         return _response(200, {"received": body})
 
-    return _response(404, {"error": "not found"})
+    return _response(404, {"recieved": "hello apigateway"})
