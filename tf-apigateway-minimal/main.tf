@@ -21,9 +21,9 @@ provider "aws" {
   region = var.aws_region
 }
 
-data "aws_lambda_layer_version" "powertools" {
-  # AWS 公開の Powertools Layer を参照する。version を省略すると最新を取得する。
-  layer_name = "arn:aws:lambda:${var.aws_region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python312-x86_64"
+locals {
+  # Layer 自動検索は lambda:ListLayerVersions 権限が必要なため、既知 ARN を組み立てる。
+  powertools_layer_arn = "arn:aws:lambda:${var.aws_region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python312-x86_64:${var.powertools_layer_version}"
 }
 
 resource "random_id" "suffix" {
@@ -68,7 +68,7 @@ resource "aws_lambda_function" "api_handler" {
   handler       = "app.handlers.api.lambda_handler"
   filename      = data.archive_file.lambda_zip.output_path
   # Powertools 本体は AWS 公開 Layer から読み込む。
-  layers        = [data.aws_lambda_layer_version.powertools.arn]
+  layers        = [local.powertools_layer_arn]
 
   # ZIP の差分を検知して更新するため、source_code_hash は実運用でもほぼ必須。
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256

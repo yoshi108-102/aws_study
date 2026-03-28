@@ -15,3 +15,9 @@ variable "powertools_log_level" {
   type        = string
   default     = "INFO"
 }
+
+variable "powertools_layer_version" {
+  description = "AWS Lambda Powertools public layer version for python312-x86_64"
+  type        = number
+  default     = 27
+}

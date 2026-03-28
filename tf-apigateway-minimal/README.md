@@ -31,6 +31,15 @@ terraform apply
 terraform apply -var 'powertools_log_level=DEBUG'
 ```
 
+Powertools Layer の版を変更する場合:
+
+```bash
+terraform apply -var 'powertools_layer_version=27'
+```
+
+注: このサンプルでは `lambda:ListLayerVersions` 権限が不要になるよう、
+Powertools Layer ARN を `region + version` から組み立てている。
+
 適用後に出力される URL で動作確認。
 
 ```bash
