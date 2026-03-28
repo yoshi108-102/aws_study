@@ -1,5 +1,7 @@
-import base64
 import json
+
+from app.usecases.echo import parse_echo_body
+from app.usecases.hello import build_hello_payload
 
 
 def _response(status_code, body):
@@ -17,25 +19,15 @@ def lambda_handler(event, context):
     path = event.get("rawPath", "")
 
     if method == "GET" and path.endswith("/hello"):
-        return _response(
-            200,
-            {
-                "message": "hello apigateway",
-                "path": path,
-                "method": method
-            }
-        )
+        print("Received GET request to /hello")
+        return _response(200, build_hello_payload(method=method, path=path))
 
     if method == "POST" and path.endswith("/echo"):
-        body_text = event.get("body") or "{}"
-        if event.get("isBase64Encoded"):
-            body_text = base64.b64decode(body_text).decode("utf-8")
-
         try:
-            body = json.loads(body_text)
-        except json.JSONDecodeError:
+            body = parse_echo_body(event)
+        except ValueError:
             return _response(400, {"error": "invalid json"})
-    
+
         return _response(200, {"received": body})
 
-    return _response(404, {"recieved": "hello apigateway"})
+    return _response(404, {"error": "not found"})
